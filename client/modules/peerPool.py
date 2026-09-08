@@ -232,8 +232,8 @@ class PeerPoolManager:
             await self._peer_loop(session)
         except asyncio.CancelledError:
             pass
-        except PeerError as exc:
-            logger.debug("Peer %s protocol error: %s", key, exc)
+        except (PeerError, OSError, ConnectionError) as exc:
+            logger.debug("Peer %s network/protocol error: %s", key, exc)
         except Exception as exc:
             logger.warning("Peer %s unexpected error: %s", key, exc, exc_info=True)
         finally:
