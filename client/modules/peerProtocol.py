@@ -415,6 +415,10 @@ class PeerConnection:
             raise HandshakeError(
                 f"Peer {self.ip}:{self.port} closed connection during handshake"
             ) from exc
+        except (ConnectionResetError, OSError) as exc:
+            raise HandshakeError(
+                f"Connection error with {self.ip}:{self.port} during handshake: {exc}"
+            ) from exc
 
         remote_info_hash, remote_peer_id = parse_handshake(response)
 
