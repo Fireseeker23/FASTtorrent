@@ -11,11 +11,11 @@
 
 ---
 
-## Executive Summary & Resume Highlights
+## Executive Summary
 
 **FASTtorrent** is a production-grade, zero-dependency BitTorrent client built from the ground up to explore systems-level networking, distributed data distribution, and high-concurrency asynchronous I/O in Python.
 
-### Key Engineering Accomplishments (Resume Ready)
+### Key Engineering Accomplishments
 - **Asynchronous Network Engine**: Built an end-to-end async I/O pipeline using `asyncio` capable of managing 50+ concurrent TCP peer connections and UDP tracker sessions without OS-level thread overhead.
 - **Custom Binary Protocol Implementation**: Handcrafted binary packet serialization and deserialization (`struct`, byte manipulation) for both the TCP Peer Wire Protocol (BEP-3) and the UDP Tracker Protocol (BEP-15).
 - **Pipelined Peer Swarm Synchronization**: Designed a bounded, non-blocking request queue (pipelining up to 5 concurrent 16 KB chunk requests per peer) to saturate link bandwidth and mitigate round-trip latency.
@@ -74,7 +74,7 @@ FASTtorrent follows a modular, decoupled reactive architecture where each layer 
 
 ---
 
-## Deep-Dive: Networking & Protocols
+## Networking & Protocols
 
 ### 1. BEP-15 UDP Tracker Protocol
 Trackers coordinating swarms generate heavy load; BEP-15 reduces HTTP header overhead by sending compact binary datagrams over UDP.
