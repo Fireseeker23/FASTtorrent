@@ -40,7 +40,18 @@ RED = "\033[31m"
 
 
 def _enable_windows_vt() -> bool:
-    """Enable virtual terminal processing on Windows for smooth ANSI rendering."""
+    """Enable virtual terminal processing on Windows and configure UTF-8 stdout."""
+    if hasattr(sys.stdout, "reconfigure"):
+        try:
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
+    if hasattr(sys.stderr, "reconfigure"):
+        try:
+            sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
+
     if sys.platform == "win32":
         try:
             import ctypes
@@ -76,10 +87,15 @@ def _format_time(seconds: float) -> str:
 
 
 def _make_progress_bar(fraction: float, width: int = 14) -> str:
-    """Generate a Unicode progress bar: [████████░░░░░░]."""
+    """Generate a progress bar: [████████░░░░░░] with ASCII fallback if needed."""
     filled_len = int(width * fraction)
     filled_len = max(0, min(width, filled_len))
-    bar = "█" * filled_len + "░" * (width - filled_len)
+    try:
+        "█░".encode(sys.stdout.encoding or "utf-8")
+        fill_char, empty_char = "█", "░"
+    except Exception:
+        fill_char, empty_char = "#", "-"
+    bar = fill_char * filled_len + empty_char * (width - filled_len)
     return f"[{bar}]"
 
 
@@ -89,6 +105,7 @@ async def run_downloader(
     max_peers: int = 30,
     max_pieces: int | None = None,
 ) -> None:
+    _enable_windows_vt()
     # 1. Parse .torrent
     print(f"\n{BOLD}{CYAN}=== FASTtorrent Downloader ==={RESET}\n")
     print(f"Loading metainfo from: {BOLD}{torrent_path}{RESET} ...")
@@ -198,53 +215,62 @@ async def run_downloader(
     last_bytes = 0
     speeds: list[float] = []
 
-    async def dashboard_loop() -> None:
+    def render_dashboard(force: bool = False) -> None:
         nonlocal last_time, last_bytes
+        now = time.time()
+        dt = now - last_time
+        if dt >= 0.3 or force:
+            bytes_delta = downloaded_bytes - last_bytes
+            current_speed = bytes_delta / dt if dt > 0 else 0
+            speeds.append(current_speed)
+            if len(speeds) > 6:
+                speeds.pop(0)
+            last_time = now
+            last_bytes = downloaded_bytes
+
+        avg_speed = sum(speeds) / len(speeds) if speeds else 0
+
+        progress = completed_pieces_count / target_pieces if target_pieces else 0
+        pct = progress * 100
+
+        if completed_pieces_count >= target_pieces:
+            progress = 1.0
+            pct = 100.0
+            eta_str = "00:00"
+        else:
+            remaining_bytes = (target_pieces - completed_pieces_count) * torrent.piece_length
+            eta = remaining_bytes / avg_speed if avg_speed > 0 else -1
+            eta_str = _format_time(eta)
+
+        active_peers = pool.num_connected
+
+        cols = shutil.get_terminal_size((80, 24)).columns
+        max_cols = max(cols - 1, 40)
+
+        # Dynamically fit the bar so the entire line NEVER wraps
+        bar_w = max(6, min(14, max_cols - 56))
+        bar = _make_progress_bar(progress, width=bar_w)
+
+        display_pieces = min(completed_pieces_count, target_pieces) if target_pieces else completed_pieces_count
+        status = (
+            f"{bar} {pct:5.1f}% | "
+            f"{_format_bytes(avg_speed)}/s | "
+            f"{display_pieces}/{target_pieces} pcs | "
+            f"{active_peers} peer(s) | "
+            f"ETA:{eta_str}"
+        )
+
+        # Strictly cap length to max_cols to prevent terminal auto-wrap
+        if len(status) > max_cols:
+            status = status[:max_cols]
+        padded = status.ljust(max_cols)
+
+        sys.stdout.write(f"\r\033[K{padded}")
+        sys.stdout.flush()
+
+    async def dashboard_loop() -> None:
         while not done_event.is_set():
-            now = time.time()
-            dt = now - last_time
-            if dt >= 0.3:
-                bytes_delta = downloaded_bytes - last_bytes
-                current_speed = bytes_delta / dt if dt > 0 else 0
-                speeds.append(current_speed)
-                if len(speeds) > 6:
-                    speeds.pop(0)
-                avg_speed = sum(speeds) / len(speeds)
-
-                last_time = now
-                last_bytes = downloaded_bytes
-
-                progress = completed_pieces_count / target_pieces if target_pieces else 0
-                pct = progress * 100
-
-                remaining_bytes = (target_pieces - completed_pieces_count) * torrent.piece_length
-                eta = remaining_bytes / avg_speed if avg_speed > 0 else -1
-
-                active_peers = pool.num_connected
-
-                cols = shutil.get_terminal_size((80, 24)).columns
-                max_cols = max(cols - 1, 40)
-
-                # Dynamically fit the bar so the entire line NEVER wraps
-                bar_w = max(6, min(14, max_cols - 56))
-                bar = _make_progress_bar(progress, width=bar_w)
-
-                status = (
-                    f"{bar} {pct:5.1f}% | "
-                    f"{_format_bytes(avg_speed)}/s | "
-                    f"{completed_pieces_count}/{target_pieces} pcs | "
-                    f"{active_peers} peer(s) | "
-                    f"ETA:{_format_time(eta)}"
-                )
-
-                # Strictly cap length to max_cols to prevent terminal auto-wrap
-                if len(status) > max_cols:
-                    status = status[:max_cols]
-                padded = status.ljust(max_cols)
-
-                sys.stdout.write(f"\r{padded}")
-                sys.stdout.flush()
-
+            render_dashboard()
             await asyncio.sleep(0.1)
 
     dash_task = asyncio.create_task(dashboard_loop())
@@ -260,6 +286,7 @@ async def run_downloader(
     finally:
         dash_task.cancel()
         reannounce_task.cancel()
+        render_dashboard(force=True)
         sys.stdout.write("\n\n")
         sys.stdout.flush()
         print("Shutting down peer connections and flushing disk...")
