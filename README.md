@@ -1,4 +1,4 @@
-# Asynctorrent
+# FASTtorrent
 
 > **High-Performance, Asynchronous BitTorrent Client in Python**  
 > *Engineered from scratch using `asyncio` — featuring full BEP-3, BEP-15, and BEP-23 compliance, custom binary wire framing, concurrent peer pools, and rarest-first piece scheduling.*
@@ -13,7 +13,7 @@
 
 ## Executive Summary & Resume Highlights
 
-**Asynctorrent** is a production-grade, zero-dependency BitTorrent client built from the ground up to explore systems-level networking, distributed data distribution, and high-concurrency asynchronous I/O in Python.
+**FASTtorrent** is a production-grade, zero-dependency BitTorrent client built from the ground up to explore systems-level networking, distributed data distribution, and high-concurrency asynchronous I/O in Python.
 
 ### Key Engineering Accomplishments (Resume Ready)
 - **Asynchronous Network Engine**: Built an end-to-end async I/O pipeline using `asyncio` capable of managing 50+ concurrent TCP peer connections and UDP tracker sessions without OS-level thread overhead.
